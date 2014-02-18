@@ -16,7 +16,7 @@
 
 window.onload = function () {
 
-    var scale = 1.5; //Set this to whatever you want. This is basically the "zoom" factor for the PDF.
+    var scale = 1.0; //Set this to whatever you want. This is basically the "zoom" factor for the PDF.
     PDFJS.workerSrc = '../../src/worker_loader.js';
 
     function loadPdf(pdfPath) {

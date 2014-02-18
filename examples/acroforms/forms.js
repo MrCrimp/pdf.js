@@ -7,6 +7,8 @@
 
 'use strict';
 
+var parsedFields = [];
+
 var formFields = {};
 
 function setupForm(div, content, viewport) {
@@ -58,7 +60,7 @@ function setupForm(div, content, viewport) {
   content.getAnnotations().then(function(items) {
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
-      switch (item.type) {
+      switch (item.subtype) {
         case 'Widget':
           if (item.fieldType != 'Tx' && item.fieldType != 'Btn' &&
               item.fieldType != 'Ch')
@@ -92,15 +94,61 @@ function setupForm(div, content, viewport) {
           assignFontStyle(input, item);
           bindInputItem(input, item);
           div.appendChild(input);
+
+          saveField(item,viewport);
+
           break;
       }
     }
   });
 }
 
+function resolveControl(pdfType) {
+    switch (pdfType) {
+        case "Btn": // && value === 'Off' || value === 'On'
+            return "checkbox";
+            break;
+        case "Dt":
+            return "date";
+        case "Ch":
+            return "list";
+            break;
+        default:
+            return "text"
+    }
+};
+
+function saveField(field, viewport){
+ 	var tag = field.fullName.toUpperCase();
+    var viewRect = PDFJS.Util.normalizeRect(viewport.convertToViewportRectangle(field.rect));
+    var section = tag.indexOf('.') > -1 ? tag.split('.')[1] : null;
+    var docField = {
+        "name": field.alternativeText,
+        "tag": tag,   
+        "controlType": resolveControl(field.fieldType),      
+        "section": section,
+//9x7
+//left 55, top 59
+        "position": {               
+            left: Math.floor( viewRect[0] ),
+            top: Math.floor( viewRect[1] ),
+            width: Math.ceil( viewRect[2] - viewRect[0] ),
+            height: Math.ceil( viewRect[3] - viewRect[1] )
+        }
+    };
+
+// height: 67
+// left: 55
+// top: 59
+// width: 65
+
+    parsedFields.push(docField);
+}
+
 function renderPage(div, pdf, pageNumber, callback) {
   pdf.getPage(pageNumber).then(function(page) {
-    var scale = 1.5;
+
+    var scale = 1.2;
     var viewport = page.getViewport(scale);
 
     var pageDisplayWidth = viewport.width;
@@ -119,19 +167,24 @@ function renderPage(div, pdf, pageNumber, callback) {
     canvas.height = pageDisplayHeight;
     pageDivHolder.appendChild(canvas);
 
-
+ 
     // Render PDF page into canvas context
     var renderContext = {
       canvasContext: context,
       viewport: viewport
     };
-    page.render(renderContext).then(callback);
 
-    // Prepare and populate form elements layer
-    var formDiv = document.createElement('div');
-    pageDivHolder.appendChild(formDiv);
+    page.render(renderContext).promise.then(function() {
+			
+    	 // Prepare and populate form elements layer
+	    var formDiv = document.createElement('div');
+	    pageDivHolder.appendChild(formDiv);
 
-    setupForm(formDiv, page, viewport);
+	    setupForm(formDiv, page, viewport);
+    	callback();
+    }
+    );
+   
   });
 }
 
