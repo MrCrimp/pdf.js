@@ -2,19 +2,11 @@
 
 'use strict';
 
-var pdfViewer = {
-	currentValues: {},
-	fields: [],
-	load: load,
-	fieldStorage: null,
-	formFactory: null,
-	canvas: 'viewer',
-	scale: 1.0
-};
+// returned to pdfDocument.fields once finished, opens up for external observers
+var parsedFields = [],
+	viewport;
 
-function setupForm(div, content, viewport) {
-
-  function bindInputItem(input, item) {
+function bindInputItem(input, item) {
   	if(pdfViewer.fieldStorage){
   		pdfViewer.fieldStorage(input, item);
   		return;
@@ -67,15 +59,60 @@ function setupForm(div, content, viewport) {
     element.setAttribute('style', element.getAttribute('style') + fontStyles);
   }
 
-  content.getAnnotations().then(function(items) {
-  	
-  	if( pdfViewer.formFactory ){
-  		//mixin must return array of parsed fields
-  		pdfViewer.fields = pdfViewer.formFactory(items, viewport, div);
-  		return;
-  	}
 
-  	// default form behaviour
+function resolveControl(pdfType) {
+    switch (pdfType) {
+        case "Btn": // && value === 'Off' || value === 'On'
+            return "checkbox";
+            break;
+        case "Dt":
+            return "date";
+        case "Ch":
+            return "list";
+            break;
+        default:
+            return "text"
+    }
+};
+
+function addField(field, viewport){
+ 	var tag = field.fullName.toUpperCase();
+    var viewRect = PDFJS.Util.normalizeRect(viewport.convertToViewportRectangle(field.rect));
+    var section = tag.indexOf('.') > -1 ? tag.split('.')[1] : null;
+    // in dataFormView: by now we've been trough data binding setup:
+    //	docField = fieldConfiguration.for(field.fullName);
+    //  load dataSource as configured and display based on field.dataSource
+    var docField = {
+        "name": field.alternativeText,
+        "tag": tag,   
+        "controlType": resolveControl(field.fieldType), 
+        "section": section, /* used for digital layout and config view */
+        "position": {               
+            left: Math.floor( viewRect[0] ),
+            top: Math.floor( viewRect[1] ),
+            width: Math.ceil( viewRect[2] - viewRect[0] ), 
+            height: Math.ceil( viewRect[3] - viewRect[1] )
+        },
+        "dataSource" : {
+        	binding: "query|oneWay|twoWay", /* select list | span | input field */
+        	expression: "WorkPermitNumber|Isolation.IsolationNumber", /* relative to current entity */
+        	dataType: "string|date|time|datetime|number|decinal|yes-no", /* how to format the value */
+        	format: "" /*optional (advanced config)*/
+        },
+        "rules" : {
+
+        }
+    };
+
+    parsedFields.push(docField);
+}
+
+function dataFormFactory(items, canvasViewport, div){
+
+	viewport = canvasViewport;
+	
+	console.log('addon dataFormFactory activated');
+
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       switch (item.subtype) {
@@ -88,9 +125,14 @@ function setupForm(div, content, viewport) {
           div.appendChild(inputDiv);
           var input;
 
+          // TODOs apply for the external mixin, not this default behaviour
+
+          // TODO: Add support for barcode and image somehow
+
+            //TODO: scale fonts to viewport scale
           if (item.fieldType == 'Tx') {
-          
-            input = createElementWithStyle('input', item); 
+          	// if data-bound, use span and display-as property. Can be date, time, etc
+            input = createElementWithStyle('input', item);
           }
           if (item.fieldType == 'Btn') {
             input = createElementWithStyle('input', item);
@@ -115,73 +157,16 @@ function setupForm(div, content, viewport) {
           bindInputItem(input, item);
           div.appendChild(input);
 
+          addField(item,viewport);
+
           break;
       }
     }
-    
-  });
+    return parsedFields;
 }
 
+exports.addons = exports.addons || {}; // hack, remove the addons stuff
 
-function renderPage(div, pdf, pageNumber, callback) {
-  pdf.getPage(pageNumber).then(function(page) {
+exports.addons.dataFormFactory = dataFormFactory;
 
-    var scale = pdfViewer.scale;
-    var viewport = page.getViewport(scale);
-
-    var pageDisplayWidth = viewport.width;
-    var pageDisplayHeight = viewport.height;
-
-    var pageDivHolder = document.createElement('div');
-    pageDivHolder.className = 'pdfpage';
-    pageDivHolder.style.width = pageDisplayWidth + 'px';
-    pageDivHolder.style.height = pageDisplayHeight + 'px';
-    div.appendChild(pageDivHolder);
-
-    // Prepare canvas using PDF page dimensions
-    var canvas = document.createElement('canvas');
-    var context = canvas.getContext('2d');
-    canvas.width = pageDisplayWidth;
-    canvas.height = pageDisplayHeight;
-    pageDivHolder.appendChild(canvas);
-
- 
-    // Render PDF page into canvas context
-    var renderContext = {
-      canvasContext: context,
-      viewport: viewport
-    };
-
-    page.render(renderContext).promise.then(function() {
-			
-    	 // Prepare and populate form elements layer
-	    var formDiv = document.createElement('div');
-	    pageDivHolder.appendChild(formDiv);
-
-	    setupForm(formDiv, page, viewport);
-    	callback();
-    }
-    );
-   
-  });
-}
-
-function load(pdfWithFormsPath){
-	// Fetch the PDF document from the URL using promices
-	PDFJS.getDocument(pdfWithFormsPath).then(function getPdfForm(pdf) {
-	  // Rendering all pages starting from first
-	  var viewer = document.getElementById( pdfViewer.canvas || 'viewer' ); //canvas id might change, it's global, get the element right away
-	  var pageNumber = 1;
-	  renderPage(viewer, pdf, pageNumber++, function pageRenderingComplete() {
-	    if (pageNumber > pdf.numPages)
-	      return; // All pages rendered
-	    // Continue rendering of the next page
-	    renderPage(viewer, pdf, pageNumber++, pageRenderingComplete);
-	  });
-	});
-}
-
-exports.pdfViewer = pdfViewer;
-
-})(window);
-
+})(window.pdfViewer);

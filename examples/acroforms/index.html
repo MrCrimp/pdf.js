@@ -14,6 +14,9 @@
   <script type="text/javascript" src="../../src/display/pattern_helper.js"></script>
   <script type="text/javascript" src="../../src/display/font_loader.js"></script>
 
+  <script type="text/javascript" src="forms.js"></script>
+  <script type="text/javascript" src="dataFormFactory.js"></script>
+
   <script type="text/javascript">
     // Specify the main script used to create a new PDF.JS web worker.
     // In production, change this to point to the combined `pdf.js` file.
@@ -21,6 +24,10 @@
 
     // Specify the PDF with AcroForm here
     var pdfWithFormsPath = '../../test/pdfs/f1040.pdf';
+
+    pdfViewer.formFactory = pdfViewer.addons.dataFormFactory;
+    pdfViewer.load(pdfWithFormsPath);
+
   </script>
   
   <style>
@@ -32,7 +39,6 @@
   .inputHint { opacity: 0.2; background: #ccc; position: absolute; }
   </style>
 
-  <script type="text/javascript" src="forms.js"></script>
 </head>
 
 <body>
